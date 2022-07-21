@@ -22,7 +22,7 @@ estimate_type_filter <- "Cori_step"
 # Specify data_type: (Confirmed cases, Deaths)
 data_type_filter <- "Deaths"
 # Specify date range (start, end)
-wave_range <- c(as.Date("2022/01/01"), as.Date("2022/10/01"))
+# wave_range <- c(as.Date("2022/01/01"), as.Date("2022/10/01"))
 
 # set up list of canidate waves
 waves <- list(c(as.Date("2020/01/01"), as.Date("2020/07/18")),
@@ -92,21 +92,27 @@ for (i in 1:ncol(combos)){
     print(corr)
 }
 
-ggplot(cor_df, aes(x = from_wave, y = to_wave, fill = rho)) +
+tmp_plot <- ggplot(cor_df, aes(x = from_wave, y = to_wave, fill = rho)) +
   geom_raster() +
   geom_text(aes(label = label)) +
   scale_fill_distiller(palette = "Spectral") +
   theme_minimal() +
   theme(panel.grid = element_blank())
 
+# display plot
+show(tmp_plot)
 
+ggsave(file = str_glue("report/sa_provinces/all_regions-{estimate_type_filter}-{data_type_filter}22.svg"),
+ plot = tmp_plot, width = 10, height = 8)
 # Pivot so that each wave is a variable
 pivot_wave_start <- wave_start_df %>%
             pivot_wider(names_from = wave_n, values_from = rank, names_prefix = "wave_")
 
 for (i in seq_along(wave_data)){
     print(str_glue(" === wave {i} === "))
-     print(str_glue("Range: {waves[[i]][1]} - {waves[[i]][2]}"))
-    print(wave_start_df %>% filter(wave_n == i) %>% arrange(rank))
-    View(wave_start_df %>% filter(wave_n == i) %>% arrange(rank))
+    print(str_glue("Range: {waves[[i]][1]} - {waves[[i]][2]}"))
+    tmp_df <- wave_start_df %>% filter(wave_n == i) %>% arrange(rank)
+    print(tmp_df)
+    View(tmp_df)
+    write.csv(tmp_df, str_glue("report/sa_provinces/all_regions-{estimate_type_filter}-{data_type_filter}-wave_{i}.csv"))
 }
