@@ -2,7 +2,8 @@ library(stringr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-
+library(vistime)
+library(cluster)
 # === ETH Zurich data ===
 
 repo_path <- "/home/matt/dev/repos/dailyRe-Data"
@@ -26,6 +27,46 @@ data_type_filter <- "Confirmed cases"
 # Specify date range (start, end)
 # wave_range <- c(as.Date("2022/01/01"), as.Date("2022/10/01"))
 
+wave_data <- raw_data %>%
+    filter(region %in% region_filter &
+        estimate_type == estimate_type_filter &
+        data_type == data_type_filter)
+
+crit_gp <- wave_data %>% filter(median_R_mean>1 & median_R_highHPD>1 & median_R_lowHPD>1)
+# vistime(crit_gp, col.event="median_R_lowHPD", col.start="date", col.end="date", col.group = "region", show_labels = FALSE)
+
+# Can maybe do this per province
+clusters <- lapply(region_filter, (\(x) kmeans((crit_gp %>% filter(region==x))$date, 5)$cluster))
+clusters[[1]]
+
+min((crit_gp %>% filter(region=="Eastern Cape"))[clusters[[1]]==1,]$date)
+max((crit_gp %>% filter(region=="Eastern Cape"))[clusters[[1]]==1,]$date)
+region_filter[[1]]
+region_filter=c("Eastern Cape")
+waves <- lapply(1:5, (\(x) c(min((crit_gp %>% filter(region=="Eastern Cape"))[clusters[[1]]==x,]$date), max((crit_gp %>% filter(region=="Eastern Cape"))[clusters[[1]]==x,]$date))))
+
+
+
+get_wave_start <- function(data, window_size = 7, column_name = "median_R_mean", critical_value = 1) {
+    min_date <- min(data$date)
+    max_date <- max(data$date)
+    lower_date <- min_date
+    found_date <- FALSE
+    while ((lower_date < max_date - window_size) && found_date == FALSE) {
+        window_data <- data %>% filter(date >= lower_date & date < lower_date + window_size)
+        if (sum(window_data[[column_name]] > critical_value) >= window_size) {
+            found_date <- TRUE
+            return(lower_date)
+        }
+        lower_date <- lower_date + 1
+    }
+    if (found_date == FALSE) {
+        return(NA)
+    }
+}
+waves[[1]]
+get_wave_start((raw_data %>% filter(region=="Eastern Cape" & date > waves[[1]][1] & date < waves[[1]][2])))
+# vistime(raw_data, col.event = "")
 # set up list of candidate waves
 # n_date_range = 7
 # start_date = as.Date("2020/01/01")
@@ -36,13 +77,13 @@ data_type_filter <- "Confirmed cases"
 #         & estimate_type == estimate_type_filter
 #         & data_type == data_type_filter & date > start_date
 #         & date < end_date
-waves <- list(
-    c(as.Date("2020/01/01"), as.Date("2020/07/18")),
-    c(as.Date("2020/09/27"), as.Date("2021/01/06")),
-    c(as.Date("2021/03/20"), as.Date("2021/07/10")),
-    c(as.Date("2021/10/30"), as.Date("2022/01/01")),
-    c(as.Date("2022/03/09"), as.Date("2022/05/16"))
-)
+# waves <- list(
+#     c(as.Date("2020/01/01"), as.Date("2020/07/18")),
+#     c(as.Date("2020/09/27"), as.Date("2021/01/06")),
+#     c(as.Date("2021/03/20"), as.Date("2021/07/10")),
+#     c(as.Date("2021/10/30"), as.Date("2022/01/01")),
+#     c(as.Date("2022/03/09"), as.Date("2022/05/16"))
+# )
 
 # Store each filtered canidate wave data to list
 wave_data <- list()
@@ -88,7 +129,7 @@ tmp <- c()
 for (i in seq_along(wave_data)) {
     wave_df <- wave_data[[i]]
     for (region_val in regions) {
-        wave_start <- get_wave_start(wave_df %>% filter(region == region_val), window_size = 10, critical_value = 1, column_name = "median_R_mean") # median_R_mean median_R_lowHPD
+        wave_start <- get_wave_start(wave_df %>% filter(region == region_val), window_size = 7, critical_value = 1, column_name = "median_R_mean") # median_R_mean median_R_lowHPD
         tmp <- c(tmp, wave_start)
         wave_start_df <- rbind(wave_start_df, data.frame(wave_n = i, region = region_val, start_date = wave_start))
         print(str_glue("wave {i} - {region_val} - {wave_start}"))
